@@ -1,4 +1,4 @@
-import streamsx.sttgateway as geo
+import streamsx.sttgateway as stt
 
 from streamsx.topology.topology import Topology
 from streamsx.topology.tester import Tester
@@ -11,8 +11,18 @@ import unittest
 import datetime
 import os
 import json
+from subprocess import call, Popen, PIPE
 from streamsx.sttgateway.schema import GatewaySchema
 
+
+def _get_test_tk_path():
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    return script_dir+'/test.source'
+
+def _run_shell_command_line(command):
+    process = Popen(command, universal_newlines=True, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    return stdout, stderr, process.returncode
 
 def _streams_install_env_var():
     result = True
@@ -28,25 +38,46 @@ class Test(unittest.TestCase):
     def setUpClass(self):
         print (str(self))
         self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
+        self.sttgateway_audio_dir = os.environ["STREAMS_STTGATEWAY_AUDIO_DIR"]
         
+    def _index_toolkit(self, tk):
+        if _streams_install_env_var():
+            cmd = os.environ['STREAMS_INSTALL']+'/bin/spl-make-toolkit -i .'
+            _run_shell_command_line('cd '+tk+'; '+cmd)
+
     def _build_only(self, name, topo):
+        # build with c++11
+        build_config = {}
+        build_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
+
         result = context.submit("TOOLKIT", topo.graph) # creates tk* directory
         print(name + ' (TOOLKIT):' + str(result))
         assert(result.return_code == 0)
-        result = context.submit("BUNDLE", topo.graph)  # creates sab file
+        result = context.submit("BUNDLE", topo.graph, build_config)  # creates sab file
         print(name + ' (BUNDLE):' + str(result))
         assert(result.return_code == 0)
 
 
-    def test_basic(self):
+    def test_app_config(self):
         print ('\n---------'+str(self))
-        name = 'test_basic'
+        name = 'test_app_config'
         topo = Topology(name)
         toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
+        self._index_toolkit(_get_test_tk_path())
+        toolkit.add_toolkit(topo, _get_test_tk_path())
+
+        files = op.Invoke(topo, kind='test::FilesReader', schemas=[GatewaySchema.STTInput])
+        files.params['audioDir'] = self.sttgateway_audio_dir
+        files = files.outputs[0]
+       
+        res = files.map(stt.WatsonSTT(credentials='stt', base_language_model='en-US_NarrowbandModel'))
+
+        res.print()
 
         if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
             tester = Tester(topo)
             tester.tuple_count(res, 1, exact=True)
+            self.test_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
             tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
         else:
             # build only
