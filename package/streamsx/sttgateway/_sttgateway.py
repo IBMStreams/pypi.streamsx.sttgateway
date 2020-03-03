@@ -11,6 +11,7 @@ import datetime
 import json
 from streamsx.sttgateway.schema import GatewaySchema
 import streamsx.topology.composite
+import streamsx.spl.toolkit
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -31,6 +32,7 @@ def _read_credentials(credentials):
         raise TypeError(credentials)
     return url, access_token, api_key, iam_token_url
 
+
 class WatsonSTT(streamsx.topology.composite.Map):
     """
     Composite map transformation for WatsonSTT
@@ -45,6 +47,9 @@ class WatsonSTT(streamsx.topology.composite.Map):
         
 
     def populate(self, topology, stream, schema, name, **options):
+        _add_toolkit_dependency(topology)
+
+        schema = GatewaySchema.STTResult
 
         app_config_name = self.credentials
         if isinstance(self.credentials, dict):
@@ -57,14 +62,24 @@ class WatsonSTT(streamsx.topology.composite.Map):
             iam_token_url = None
             app_config_name = self.credentials
 
+        _op_token = _IAMAccessTokenGenerator(topology=topology, schema=GatewaySchema.AccessToken, appConfigName=app_config_name, accessToken=access_token, apiKey=api_key, iamTokenURL=iam_token_url, name=name)
+        token_stream = _op_token.outputs[0]
 
-        _op = _WatsonSTT(stream=stream, schema=schema, name=name)
-        
+        _op = _WatsonSTT(stream, token_stream, schema=schema, name=name)
+        _op.params['sttResultMode'] = _op.expression('partial');
         _op.params['baseLanguageModel'] = self.base_language_model
         if app_config_name is not None:
-            _op.params['uri'] = _op.expression('getApplicationConfigurationProperty('+app_config_name+', \"url\", \"\")')
+            _op.params['uri'] = _op.expression('getApplicationConfigurationProperty(\"'+app_config_name+'\", \"url\", \"\")')
         else:
             _op.params['uri'] = url
+
+        _op.finalizedUtterance = _op.output(_op.outputs[0], _op.expression('isFinalizedUtterance()'))
+        _op.transcriptionCompleted = _op.output(_op.outputs[0], _op.expression('isTranscriptionCompleted()'))
+        _op.sttErrorMessage = _op.output(_op.outputs[0], _op.expression('getSTTErrorMessage()'))
+        _op.utteranceStartTime = _op.output(_op.outputs[0], _op.expression('getUtteranceStartTime()'))
+        _op.utteranceEndTime = _op.output(_op.outputs[0], _op.expression('getUtteranceEndTime()'))
+        _op.confidence = _op.output(_op.outputs[0], _op.expression('getConfidence()'))
+        _op.utterance = _op.output(_op.outputs[0], _op.expression('getUtteranceText()'))
 
         return _op.outputs[0]
 
@@ -72,10 +87,10 @@ class WatsonSTT(streamsx.topology.composite.Map):
 
 
 class _WatsonSTT(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema=None, baseLanguageModel=None, uri=None, acousticCustomizationId=None, baseModelVersion=None, contentType=None, cpuYieldTimeInAudioSenderThread=None, customizationId=None, customizationWeight=None, filterProfanity=None, keywordsSpottingThreshold=None, keywordsToBeSpotted=None, maxConnectionRetryDelay=None, maxUtteranceAlternatives=None, nonFinalUtterancesNeeded=None, smartFormattingNeeded=None, sttLiveMetricsUpdateNeeded=None, sttRequestLogging=None, sttResultMode=None, websocketLoggingNeeded=None, wordAlternativesThreshold=None, name=None):
+    def __init__(self, stream, token_stream, schema=None, baseLanguageModel=None, uri=None, acousticCustomizationId=None, baseModelVersion=None, contentType=None, cpuYieldTimeInAudioSenderThread=None, customizationId=None, customizationWeight=None, filterProfanity=None, keywordsSpottingThreshold=None, keywordsToBeSpotted=None, maxConnectionRetryDelay=None, maxUtteranceAlternatives=None, nonFinalUtterancesNeeded=None, smartFormattingNeeded=None, sttLiveMetricsUpdateNeeded=None, sttRequestLogging=None, sttResultMode=None, websocketLoggingNeeded=None, wordAlternativesThreshold=None, name=None):
         topology = stream.topology
-        kind="com.ibm.streamsx.sttgateway::WatsonSTT"
-        inputs=stream
+        kind="com.ibm.streamsx.sttgateway.watson::WatsonSTT"
+        inputs=[stream,token_stream]
         schemas=schema
         params = dict()
         if baseLanguageModel is not None:
@@ -120,4 +135,34 @@ class _WatsonSTT(streamsx.spl.op.Invoke):
             params['wordAlternativesThreshold'] = wordAlternativesThreshold
 
         super(_WatsonSTT, self).__init__(topology,kind,inputs,schema,params,name)
+
+
+class _IAMAccessTokenGenerator(streamsx.spl.op.Source):
+    def __init__(self, topology, schema, appConfigName=None, accessToken=None, apiKey=None, iamTokenURL=None, defaultExpiresIn=None, guardTime=None, maxRetryDelay=None, failureRetryDelay=None, initDelay=None, expiresInTestValue=None, name=None):
+        kind="com.ibm.streamsx.sttgateway.watson::IAMAccessTokenGenerator"
+        inputs=None
+        schemas=schema
+        params = dict()
+        if appConfigName is not None:
+            params['appConfigName'] = appConfigName
+        if accessToken is not None:
+            params['accessToken'] = accessToken
+        if apiKey is not None:
+            params['apiKey'] = apiKey
+        if iamTokenURL is not None:
+            params['iamTokenURL'] = iamTokenURL
+        if defaultExpiresIn is not None:
+            params['defaultExpiresIn'] = defaultExpiresIn
+        if guardTime is not None:
+            params['guardTime'] = guardTime
+        if maxRetryDelay is not None:
+            params['maxRetryDelay'] = maxRetryDelay
+        if failureRetryDelay is not None:
+            params['failureRetryDelay'] = failureRetryDelay
+        if initDelay is not None:
+            params['initDelay'] = initDelay
+        if expiresInTestValue is not None:
+            params['expiresInTestValue'] = expiresInTestValue
+
+        super(_IAMAccessTokenGenerator, self).__init__(topology,kind,schemas,params,name)
 
