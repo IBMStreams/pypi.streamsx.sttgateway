@@ -1,0 +1,46 @@
+namespace test;
+
+
+public composite FilesReader (output AudioBlobData) {
+		
+	param
+		expression<rstring> $audioDir:                       getSubmissionTimeValue("audioDir", "../../audio-files");
+		expression<uint32>  $audioBlobFragmentSize : (uint32)getSubmissionTimeValue("audioBlobFragmentSize", "512");
+
+	graph
+
+		stream<rstring fileName> AudioFileName as O = DirectoryScan() {
+			param
+				directory : $audioDir;
+				pattern : "\\.wav$";
+				sortBy: name;
+				// Give sufficient delay here so that the previous operator can complete generating the
+				// IAM access token and send it to the WatsonSTT operator.
+				// This is not a requirement but avoids error logs in WatsonSTT operator
+				initDelay: 5.0;
+			config
+				placement : partitionColocation("somePartitionColocationId");
+		}
+		
+		// Read the file content into the blob and count the segments
+		// The catch annotation ensures that the application crashes if the file is removed prematurely
+		@catch(exception=all, tupleTrace=true, stackTrace=true)
+		stream<rstring conversationId, blob speech> AudioBlobData as O = FileSource(AudioFileName as I) {
+			logic
+				state: {
+					mutable rstring tmp = "";
+				}
+				onTuple I:
+					tmp = fileName;
+			param
+				format: block;
+				blockSize: $audioBlobFragmentSize;
+			output O:
+				conversationId = tmp;
+			config
+				placement : partitionColocation("somePartitionColocationId");
+		}
+
+}
+
+
