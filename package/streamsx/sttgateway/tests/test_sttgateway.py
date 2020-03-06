@@ -66,8 +66,15 @@ class Test(unittest.TestCase):
         self._index_toolkit(_get_test_tk_path())
         toolkit.add_toolkit(topo, _get_test_tk_path())
 
+        dirname = 'etc'
+        topo.add_file_dependency(self.sttgateway_audio_dir, dirname) 
+        if os.path.isdir(self.sttgateway_audio_dir):
+            # add_file_dependency adds it to sub directory having last part of the dir as name
+            # retrieve the name here and use it later in the parameter
+            dirname = dirname + '/' + os.path.basename(self.sttgateway_audio_dir) 
+
         files = op.Invoke(topo, kind='test::FilesReader', schemas=[GatewaySchema.STTInput])
-        files.params['audioDir'] = self.sttgateway_audio_dir
+        files.params['audioApplDir'] = dirname
         files = files.outputs[0]
        
         res = files.map(stt.WatsonSTT(credentials='stt', base_language_model='en-US_NarrowbandModel'))
@@ -76,13 +83,36 @@ class Test(unittest.TestCase):
 
         if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
             tester = Tester(topo)
-            tester.tuple_count(res, 1, exact=True)
+            tester.tuple_count(res, 1, exact=False)
             self.test_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
             tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
         else:
             # build only
             self._build_only(name, topo)
 
+
+    def test_properties(self):
+        print ('\n---------'+str(self))
+        name = 'test_properties'
+        topo = Topology(name)
+        toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
+        self._index_toolkit(_get_test_tk_path())
+        toolkit.add_toolkit(topo, _get_test_tk_path())
+
+        files = op.Invoke(topo, kind='test::FilesReader', schemas=[GatewaySchema.STTInput])
+        files.params['pattern'] = "\\.mp3$"
+        files = files.outputs[0]
+       
+        creds = {
+            'url': 'wss://hostplaceholder/speech-to-text/ibm-wc/instances/1188888444444/api/v1/recognize',
+            'access_token': 'sample-access-token'
+        }
+        gateway = stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel', partial_result=True)
+        gateway.content_type = 'audio/mp3'
+        res = files.map(gateway)
+        res.print()
+        # build only
+        self._build_only(name, topo)
 
 class TestDistributed(Test):
     def setUp(self):

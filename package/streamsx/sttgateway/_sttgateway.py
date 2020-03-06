@@ -37,23 +37,50 @@ class WatsonSTT(streamsx.topology.composite.Map):
     """
     Composite map transformation for WatsonSTT
 
+
+    Attributes
+    ----------
+    credentials : str|dict
+        Name of the application configuration or dict containing the credentials for WatsonSTT.
+    base_language_model : str
+        This parameter specifies the name of the Watson STT base language model that should be used, see: https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-input#models
+    partial_result : bool
+        ``True`` to get partial utterances, ``False`` to get the full text after transcribing the entire audio (default).
+    options : kwargs
+        The additional optional parameters as variable keyword arguments.
     """
 
-    def __init__(self, credentials, base_language_model):
+    def __init__(self, credentials, base_language_model, partial_result=False, **options):
 
         self.credentials = credentials
         self.base_language_model = base_language_model
+        self.partial_result = partial_result
 
-        
+        self.content_type = None
+        if 'content_type' in options:
+            self.content_type = options.get('content_type')
+
+    @property
+    def content_type(self):
+        """
+            str: Content type to be used for transcription. (Default is audio/wav) 
+        """
+        return self._content_type
+
+    @content_type.setter
+    def content_type(self, value):
+        self._content_type = value
+
 
     def populate(self, topology, stream, schema, name, **options):
         _add_toolkit_dependency(topology)
 
         schema = GatewaySchema.STTResult
+        if self.partial_result:
+            schema = schema.extend(GatewaySchema.STTResultPartialExtension)
 
-        app_config_name = self.credentials
         if isinstance(self.credentials, dict):
-            url, access_token, api_key, iam_token_url = _read_credentials(credentials)
+            url, access_token, api_key, iam_token_url = _read_credentials(self.credentials)
             app_config_name = None
         else:
             url=None
@@ -65,20 +92,25 @@ class WatsonSTT(streamsx.topology.composite.Map):
         _op_token = _IAMAccessTokenGenerator(topology=topology, schema=GatewaySchema.AccessToken, appConfigName=app_config_name, accessToken=access_token, apiKey=api_key, iamTokenURL=iam_token_url, name=name)
         token_stream = _op_token.outputs[0]
 
-        _op = _WatsonSTT(stream, token_stream, schema=schema, name=name)
-        _op.params['sttResultMode'] = _op.expression('partial');
-        _op.params['baseLanguageModel'] = self.base_language_model
+        _op = _WatsonSTT(stream, token_stream, schema=schema, baseLanguageModel=self.base_language_model, contentType=self.content_type, name=name)
+        
+        if self.partial_result:
+            _op.params['sttResultMode'] = _op.expression('partial')
+        else:
+            _op.params['sttResultMode'] = _op.expression('complete');
         if app_config_name is not None:
             _op.params['uri'] = _op.expression('getApplicationConfigurationProperty(\"'+app_config_name+'\", \"url\", \"\")')
         else:
             _op.params['uri'] = url
 
-        _op.finalizedUtterance = _op.output(_op.outputs[0], _op.expression('isFinalizedUtterance()'))
+        if self.partial_result:
+            _op.finalizedUtterance = _op.output(_op.outputs[0], _op.expression('isFinalizedUtterance()'))
+            _op.confidence = _op.output(_op.outputs[0], _op.expression('getConfidence()'))
+
         _op.transcriptionCompleted = _op.output(_op.outputs[0], _op.expression('isTranscriptionCompleted()'))
         _op.sttErrorMessage = _op.output(_op.outputs[0], _op.expression('getSTTErrorMessage()'))
         _op.utteranceStartTime = _op.output(_op.outputs[0], _op.expression('getUtteranceStartTime()'))
         _op.utteranceEndTime = _op.output(_op.outputs[0], _op.expression('getUtteranceEndTime()'))
-        _op.confidence = _op.output(_op.outputs[0], _op.expression('getConfidence()'))
         _op.utterance = _op.output(_op.outputs[0], _op.expression('getUtteranceText()'))
 
         return _op.outputs[0]

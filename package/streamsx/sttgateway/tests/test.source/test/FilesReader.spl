@@ -1,18 +1,28 @@
 namespace test;
 
+public rstring getAudioDir(rstring audioApplDir, rstring audioSubmissionDir) {
+	if ("" == audioSubmissionDir) {
+		return getApplicationDir() + "/" + audioApplDir;
+	}
+	else {
+		return audioSubmissionDir;
+	}
+}
 
 public composite FilesReader (output AudioBlobData) {
 		
 	param
-		expression<rstring> $audioDir:                       getSubmissionTimeValue("audioDir", "../../audio-files");
+		expression<rstring> $pattern: "\\.wav$";
+		expression<rstring> $audioApplDir: "etc";
+		expression<rstring> $audioDir:                       getSubmissionTimeValue("audioDir", "");
 		expression<uint32>  $audioBlobFragmentSize : (uint32)getSubmissionTimeValue("audioBlobFragmentSize", "512");
 
 	graph
 
 		stream<rstring fileName> AudioFileName as O = DirectoryScan() {
 			param
-				directory : $audioDir;
-				pattern : "\\.wav$";
+				directory : getAudioDir($audioApplDir, $audioDir);
+				pattern : $pattern;
 				sortBy: name;
 				// Give sufficient delay here so that the previous operator can complete generating the
 				// IAM access token and send it to the WatsonSTT operator.

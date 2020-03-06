@@ -8,41 +8,64 @@ from streamsx.topology.schema import StreamSchema
 # Defines Message types with default attribute names and types.
 _SPL_SCHEMA_ACCESS_TOKEN = 'tuple<rstring access_token, rstring refresh_token, rstring scope, int64 expiration, rstring token_type, int64 expires_in>'
 
-_SPL_SCHEMA_STT_RESULT = 'tuple<rstring conversationId,	boolean finalizedUtterance, boolean transcriptionCompleted, rstring sttErrorMessage, float64 utteranceStartTime, float64 utteranceEndTime, float64 confidence, rstring utterance>'
+_SPL_SCHEMA_STT_RESULT = 'tuple<rstring conversationId,	boolean transcriptionCompleted, rstring sttErrorMessage, float64 utteranceStartTime, float64 utteranceEndTime, rstring utterance>'
+
+_SPL_SCHEMA_STT_RESULT_PARTIAL = 'tuple<boolean finalizedUtterance, float64 confidence>'
 
 _SPL_SCHEMA_STT_INPUT = 'tuple<rstring conversationId, blob speech>'
 			
 
 class GatewaySchema:
     """
-    Structured stream schema
+    Structured stream schemas for :py:meth:`~streamsx.sttgateway.WatsonSTT`
     
     """
-
-    AccessToken = StreamSchema (_SPL_SCHEMA_ACCESS_TOKEN)
-    """
-    This schema can be used as output for ...
-    
-    The schema defines following attributes
-
-    """
-    pass
 
     STTResult = StreamSchema (_SPL_SCHEMA_STT_RESULT)
     """
-    This schema can be used as output for ...
+    This schema is used as output in :py:meth:`~streamsx.sttgateway.WatsonSTT`
     
     The schema defines following attributes
+
+    * conversationId(rstring) - identifier, for example file name
+    * transcriptionCompleted(boolean) - boolean value to indicate whether the full transcription/conversation is completed
+    * sttErrorMessage(rstring) - Watson STT error message if any.
+    * utteranceStartTime(float64) - start time of an utterance relative to the start of the audio
+    * utteranceEndTime(float64) - end time of an utterance relative to the start of the audio
+    * utterance(rstring) - the transcription of audio in the form of a single utterance
 
     """
     pass
 
-    STTInput = StreamSchema (_SPL_SCHEMA_STT_INPUT)
+    STTResultPartialExtension = StreamSchema (_SPL_SCHEMA_STT_RESULT_PARTIAL)
     """
-    This schema can be used as output for ...
+    This schema is added to STTResult schema when result mode is partial in :py:meth:`~streamsx.sttgateway.WatsonSTT`
     
     The schema defines following attributes
 
+    * finalizedUtterance(boolean) - boolean value to indicate if this is an interim partial utterance or a finalized utterance. 
+    * confidence(float64) - confidence value for an interim partial utterance or for a finalized utterance or for the full text.
+
+    """
+    pass
+
+
+    STTInput = StreamSchema (_SPL_SCHEMA_STT_INPUT)
+    """
+    Use this schema as input for :py:meth:`~streamsx.sttgateway.WatsonSTT`
+    
+    The schema defines following attributes
+
+    * conversationId(rstring) - identifier, for example file name
+    * speech(blob) - audio data
+
+    """
+    pass
+
+
+    AccessToken = StreamSchema (_SPL_SCHEMA_ACCESS_TOKEN)
+    """
+    This schema is used internally in :py:meth:`~streamsx.sttgateway.WatsonSTT` by the access token generator.
     """
     pass
 
