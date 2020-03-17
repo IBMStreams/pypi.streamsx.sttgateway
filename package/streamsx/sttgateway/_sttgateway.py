@@ -32,6 +32,59 @@ def _read_credentials(credentials):
         raise TypeError(credentials)
     return url, access_token, api_key, iam_token_url
 
+def configure_connection(instance, credentials, name='sttConnection'):
+    """Configures IBM Streams for a connection to Watson STT.
+
+    Creates an application configuration object containing the required properties with connection information.
+
+    Example for creating a configuration for a Streams instance with connection details::
+
+        from streamsx.rest import Instance
+        import streamsx.topology.context
+        from icpd_core import icpd_util
+        import streamsx.sttgateway as stt
+        
+        cfg=icpd_util.get_service_instance_details(name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service(cfg)
+        sample_credentials = {
+            'url': 'wss://hostplaceholder/speech-to-text/ibm-wc/instances/1188888444444/api/v1/recognize',
+            'access_token': 'sample-access-token'
+        }
+        app_cfg = stt.configure_connection(instance, credentials=sample_credentials, name='stt-sample')
+
+    Args:
+        instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
+        credentials(dict): dict containing "url" and "access_token" (STT service in Cloud Pak for Data) or "url" and "api_key" and "iam_token_url" (STT IBM cloud service).
+        name(str): Name of the application configuration
+
+    Returns:
+        Name of the application configuration.
+    """
+
+    # Prepare operator (toolkit) specific properties for application configuration
+    description = 'Config for STT connection ' + name
+    properties = {}
+    url, access_token, api_key, iam_token_url = _read_credentials(credentials)
+    if url is not None:
+        properties['url']=url
+    if access_token is not None:
+        properties['accessToken']=access_token
+    if api_key is not None:
+        properties['apiKey']=api_key
+    if iam_token_url is not None:
+        properties['iamTokenURL']=iam_token_url
+    
+    # check if application configuration exists
+    app_config = instance.get_application_configurations(name=name)
+    if app_config:
+        print ('update application configuration: '+name)
+        app_config[0].update(properties)
+    else:
+        print ('create application configuration: '+name)
+        instance.create_application_configuration(name, properties, description)
+    return name
+
 
 class WatsonSTT(streamsx.topology.composite.Map):
     """
@@ -41,7 +94,7 @@ class WatsonSTT(streamsx.topology.composite.Map):
     Attributes
     ----------
     credentials : str|dict
-        Name of the application configuration or dict containing the credentials for WatsonSTT.
+        Name of the application configuration or dict containing the credentials for WatsonSTT. The dict contains either "url" and "access_token" (STT service in Cloud Pak for Data) or "url" and "api_key" and "iam_token_url" (STT IBM cloud service)
     base_language_model : str
         This parameter specifies the name of the Watson STT base language model that should be used, see: https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-input#models
     partial_result : bool
