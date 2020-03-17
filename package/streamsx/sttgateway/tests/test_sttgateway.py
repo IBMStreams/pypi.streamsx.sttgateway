@@ -7,6 +7,7 @@ import streamsx.spl.op as op
 from streamsx.spl import toolkit
 from streamsx.topology import context
 import streamsx.rest as sr
+import streamsx.rest_primitives
 import unittest
 import datetime
 import os
@@ -28,6 +29,14 @@ def _streams_install_env_var():
     result = True
     try:
         os.environ['STREAMS_INSTALL']
+    except KeyError: 
+        result = False
+    return result
+
+def cp4d_url_env_var():
+    result = True
+    try:
+        os.environ['CP4D_URL']
     except KeyError: 
         result = False
     return result
@@ -66,6 +75,29 @@ class Test(unittest.TestCase):
         self._index_toolkit(_get_test_tk_path())
         toolkit.add_toolkit(topo, _get_test_tk_path())
 
+        app_config = 'stt'
+        cred_file = os.environ['STT_CREDENTIALS']
+        print("STT credentials file:" + cred_file)
+        with open(cred_file) as data_file:
+            creds = json.load(data_file)
+
+        if ("TestDistributed" in str(self) and cp4d_url_env_var() is True):
+            instance = streamsx.rest_primitives.Instance.of_endpoint(verify=False)
+            res = stt.configure_connection(instance, credentials=creds, name=app_config)
+            print (str(res))
+        else: 
+            if _streams_install_env_var():        
+                _run_shell_command_line('streamtool rmappconfig --noprompt '+app_config)
+                print ('create appConfig with streamtool: ' + app_config)
+                if 'access_token' in creds:
+                    cmd = os.environ['STREAMS_INSTALL']+'/bin/streamtool mkappconfig --property \"accessToken='+creds.get('access_token')+'\" --property \"url='+creds.get('url')+'\" '+app_config
+                else:
+                    cmd = os.environ['STREAMS_INSTALL']+'/bin/streamtool mkappconfig --property \"apiKey='+creds.get('api_key')+'\" --property \"iamTokenURL='+creds.get('iam_token_url')+'\" --property \"url='+creds.get('url')+'\" '+app_config
+                stdout, stderr, rc = _run_shell_command_line(cmd)
+                print (str(rc))
+            else:
+                print ('Application configuration not created')
+     
         dirname = 'etc'
         topo.add_file_dependency(self.sttgateway_audio_dir, dirname) 
         if os.path.isdir(self.sttgateway_audio_dir):
@@ -77,7 +109,7 @@ class Test(unittest.TestCase):
         files.params['audioApplDir'] = dirname
         files = files.outputs[0]
        
-        res = files.map(stt.WatsonSTT(credentials='stt', base_language_model='en-US_NarrowbandModel'))
+        res = files.map(stt.WatsonSTT(credentials=app_config, base_language_model='en-US_NarrowbandModel'))
 
         res.print()
 
@@ -90,7 +122,7 @@ class Test(unittest.TestCase):
             # build only
             self._build_only(name, topo)
 
-
+    @unittest.skipUnless(_streams_install_env_var(), "STREAMS_INSTALL required")
     def test_properties(self):
         print ('\n---------'+str(self))
         name = 'test_properties'
