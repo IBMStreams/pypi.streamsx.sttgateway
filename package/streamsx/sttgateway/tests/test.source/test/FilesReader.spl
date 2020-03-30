@@ -9,7 +9,10 @@ public rstring getAudioDir(rstring audioApplDir, rstring audioSubmissionDir) {
 	}
 }
 
-public composite FilesReader (output AudioBlobData) {
+
+type AudioData = rstring conversationId, blob speech;
+
+public composite FilesReader (output stream<AudioData> AudioBlobData) {
 		
 	param
 		expression<rstring> $pattern: "\\.wav$";
