@@ -146,6 +146,48 @@ class Test(unittest.TestCase):
         # build only
         self._build_only(name, topo)
 
+
+    def test_schema_named_tuple(self):
+        print ('\n---------'+str(self))
+        name = 'test_schema_named_tuple'
+        topo = Topology(name)
+        toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
+        self._index_toolkit(_get_test_tk_path())
+        toolkit.add_toolkit(topo, _get_test_tk_path())
+
+        app_config = 'stt'
+        cred_file = os.environ['STT_CREDENTIALS']
+        print("STT credentials file:" + cred_file)
+        with open(cred_file) as data_file:
+            creds = json.load(data_file)
+    
+        dirname = 'etc'
+        topo.add_file_dependency(self.sttgateway_audio_dir, dirname) 
+        if os.path.isdir(self.sttgateway_audio_dir):
+            # add_file_dependency adds it to sub directory having last part of the dir as name
+            # retrieve the name here and use it later in the parameter
+            dirname = dirname + '/' + os.path.basename(self.sttgateway_audio_dir) 
+
+        files = op.Invoke(topo, kind='test::FilesReader', schemas=[GatewaySchema.STTInput])
+        files.params['audioApplDir'] = dirname
+        files = files.outputs[0]
+
+        import typing
+        SttResult = typing.NamedTuple('SttResult', [('conversationId', str), ('utteranceText', str)])
+
+        res = files.map(stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel'), schema=SttResult)
+
+        res.print()
+
+        if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
+            tester = Tester(topo)
+            tester.tuple_count(res, 1, exact=False)
+            self.test_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
+            tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
+        else:
+            # build only
+            self._build_only(name, topo)
+
 class TestDistributed(Test):
     def setUp(self):
         Tester.setup_distributed(self)
