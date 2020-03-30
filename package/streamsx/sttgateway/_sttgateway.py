@@ -128,9 +128,15 @@ class WatsonSTT(streamsx.topology.composite.Map):
     def populate(self, topology, stream, schema, name, **options):
         _add_toolkit_dependency(topology)
 
-        schema = GatewaySchema.STTResult
-        if self.partial_result:
-            schema = schema.extend(GatewaySchema.STTResultPartialExtension)
+        is_stt_result_schema = False
+        if schema is None:
+            is_stt_result_schema = True
+            schema = GatewaySchema.STTResult
+            if self.partial_result:
+                schema = schema.extend(GatewaySchema.STTResultPartialExtension)
+
+        if schema is GatewaySchema.STTResult:
+            is_stt_result_schema = True
 
         if isinstance(self.credentials, dict):
             url, access_token, api_key, iam_token_url = _read_credentials(self.credentials)
@@ -156,15 +162,15 @@ class WatsonSTT(streamsx.topology.composite.Map):
         else:
             _op.params['uri'] = url
 
-        if self.partial_result:
-            _op.finalizedUtterance = _op.output(_op.outputs[0], _op.expression('isFinalizedUtterance()'))
-            _op.confidence = _op.output(_op.outputs[0], _op.expression('getConfidence()'))
-
-        _op.transcriptionCompleted = _op.output(_op.outputs[0], _op.expression('isTranscriptionCompleted()'))
-        _op.sttErrorMessage = _op.output(_op.outputs[0], _op.expression('getSTTErrorMessage()'))
-        _op.utteranceStartTime = _op.output(_op.outputs[0], _op.expression('getUtteranceStartTime()'))
-        _op.utteranceEndTime = _op.output(_op.outputs[0], _op.expression('getUtteranceEndTime()'))
-        _op.utterance = _op.output(_op.outputs[0], _op.expression('getUtteranceText()'))
+        if is_stt_result_schema:
+            if self.partial_result:
+                _op.finalizedUtterance = _op.output(_op.outputs[0], _op.expression('isFinalizedUtterance()'))
+                _op.confidence = _op.output(_op.outputs[0], _op.expression('getConfidence()'))
+            _op.transcriptionCompleted = _op.output(_op.outputs[0], _op.expression('isTranscriptionCompleted()'))
+            _op.sttErrorMessage = _op.output(_op.outputs[0], _op.expression('getSTTErrorMessage()'))
+            _op.utteranceStartTime = _op.output(_op.outputs[0], _op.expression('getUtteranceStartTime()'))
+            _op.utteranceEndTime = _op.output(_op.outputs[0], _op.expression('getUtteranceEndTime()'))
+            _op.utterance = _op.output(_op.outputs[0], _op.expression('getUtteranceText()'))
 
         return _op.outputs[0]
 
