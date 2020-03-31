@@ -168,20 +168,27 @@ class Test(unittest.TestCase):
             # retrieve the name here and use it later in the parameter
             dirname = dirname + '/' + os.path.basename(self.sttgateway_audio_dir) 
 
-        files = op.Invoke(topo, kind='test::FilesReader', schemas=[GatewaySchema.STTInput])
-        files.params['audioApplDir'] = dirname
-        files = files.outputs[0]
+        dirname = streamsx.spl.op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
+        print(dirname)
 
+        import streamsx.standard.files as stdfiles
         import typing
         SttResult = typing.NamedTuple('SttResult', [('conversationId', str), ('utteranceText', str)])
 
-        res = files.map(stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel'), schema=SttResult)
+        s = topo.source(stdfiles.DirectoryScan(directory=dirname, pattern='.*call-center.*\.wav$'))
 
-        res.print()
+        low1 = s.low_latency()
+        files = low1.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=StreamSchema('tuple<blob speech, rstring conversationId>'))
+
+        res = files.map(stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel'), schema=SttResult)
+        elow1 = res.end_low_latency()
+
+        elow1.print()
 
         if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
             tester = Tester(topo)
-            tester.tuple_count(res, 1, exact=False)
+            tester.run_for(60)
+            tester.tuple_count(elow1, 3, exact=False)
             self.test_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
             tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
         else:
