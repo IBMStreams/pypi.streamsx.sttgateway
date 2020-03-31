@@ -96,13 +96,17 @@ class WatsonSTT(streamsx.topology.composite.Map):
         import streamsx.standard.files as stdfiles
         from streamsx.topology.topology import Topology
         from streamsx.topology.schema import StreamSchema
+        import streamsx.spl.op as op
         import typing
+        import os
         
         # credentials for WatsonSTT service 
         stt_creds = {
             "url": "wss://xxxx/instances/xxxx/v1/recognize",
             "access_token": "xxxx",
         }
+        
+        topo = Topology()
     
         # add sample files to application bundle
         sample_audio_dir='/your-directory-with-wav-files' # either dir or single file
@@ -110,7 +114,7 @@ class WatsonSTT(streamsx.topology.composite.Map):
         topo.add_file_dependency(sample_audio_dir, dirname) 
         if os.path.isdir(sample_audio_dir):
             dirname = dirname + '/' + os.path.basename(sample_audio_dir) 
-        dirname = streamsx.spl.op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
+        dirname = op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
 
         s = topo.source(stdfiles.DirectoryScan(directory=dirname, pattern='.*call-center.*\.wav$'))
         files = s.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=StreamSchema('tuple<blob speech, rstring conversationId>'))

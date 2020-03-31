@@ -155,7 +155,6 @@ class Test(unittest.TestCase):
         self._index_toolkit(_get_test_tk_path())
         toolkit.add_toolkit(topo, _get_test_tk_path())
 
-        app_config = 'stt'
         cred_file = os.environ['STT_CREDENTIALS']
         print("STT credentials file:" + cred_file)
         with open(cred_file) as data_file:
@@ -168,7 +167,7 @@ class Test(unittest.TestCase):
             # retrieve the name here and use it later in the parameter
             dirname = dirname + '/' + os.path.basename(self.sttgateway_audio_dir) 
 
-        dirname = streamsx.spl.op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
+        dirname = op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
         print(dirname)
 
         import streamsx.standard.files as stdfiles
