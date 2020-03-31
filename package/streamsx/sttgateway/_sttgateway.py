@@ -90,6 +90,35 @@ class WatsonSTT(streamsx.topology.composite.Map):
     """
     Composite map transformation for WatsonSTT
 
+    Example for reading audio files and speech to text transformation::
+
+        import streamsx.sttgateway as stt
+        import streamsx.standard.files as stdfiles
+        from streamsx.topology.topology import Topology
+        from streamsx.topology.schema import StreamSchema
+        import typing
+        
+        # credentials for WatsonSTT service 
+        stt_creds = {
+            "url": "wss://xxxx/instances/xxxx/v1/recognize",
+            "access_token": "xxxx",
+        }
+    
+        # add sample files to application bundle
+        sample_audio_dir='/your-directory-with-wav-files' # either dir or single file
+        dirname = 'etc'
+        topo.add_file_dependency(sample_audio_dir, dirname) 
+        if os.path.isdir(sample_audio_dir):
+            dirname = dirname + '/' + os.path.basename(sample_audio_dir) 
+        dirname = streamsx.spl.op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
+
+        s = topo.source(stdfiles.DirectoryScan(directory=dirname, pattern='.*call-center.*\.wav$'))
+        files = s.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=StreamSchema('tuple<blob speech, rstring conversationId>'))
+
+        SttResult = typing.NamedTuple('SttResult', [('conversationId', str), ('utteranceText', str)])
+        res = files.map(stt.WatsonSTT(credentials=stt_creds, base_language_model='en-US_NarrowbandModel'), schema=SttResult)
+
+        res.print()
 
     Attributes
     ----------
