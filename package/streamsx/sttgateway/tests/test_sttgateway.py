@@ -141,10 +141,65 @@ class Test(unittest.TestCase):
         }
         gateway = stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel', partial_result=True)
         gateway.content_type = 'audio/mp3'
+        gateway.filter_profanity = True
+        gateway.keywords_spotting_threshold = 0.5
+        gateway.keywords_to_be_spotted = ['sample','test']
+        #gateway.keywords_to_be_spotted = "['sample','test']"
+        gateway.max_utterance_alternatives = 5
+        gateway.non_final_utterances_needed = True
+
         res = files.map(gateway)
-        res.print()
+
         # build only
         self._build_only(name, topo)
+
+
+    def test_schema_named_tuple(self):
+        print ('\n---------'+str(self))
+        name = 'test_schema_named_tuple'
+        topo = Topology(name)
+        toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
+        self._index_toolkit(_get_test_tk_path())
+        toolkit.add_toolkit(topo, _get_test_tk_path())
+
+        cred_file = os.environ['STT_CREDENTIALS']
+        print("STT credentials file:" + cred_file)
+        with open(cred_file) as data_file:
+            creds = json.load(data_file)
+    
+        dirname = 'etc'
+        topo.add_file_dependency(self.sttgateway_audio_dir, dirname) 
+        if os.path.isdir(self.sttgateway_audio_dir):
+            # add_file_dependency adds it to sub directory having last part of the dir as name
+            # retrieve the name here and use it later in the parameter
+            dirname = dirname + '/' + os.path.basename(self.sttgateway_audio_dir) 
+
+        dirname = op.Expression.expression('getApplicationDir()+"/'+dirname+'"')
+        print(dirname)
+
+        import streamsx.standard.files as stdfiles
+        import typing
+        SttResult = typing.NamedTuple('SttResult', [('conversationId', str), ('utteranceText', str)])
+
+        s = topo.source(stdfiles.DirectoryScan(directory=dirname, pattern='.*call-center.*\.wav$'))
+
+        low1 = s.low_latency()
+        files = low1.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=StreamSchema('tuple<blob speech, rstring conversationId>'))
+
+        res = files.map(stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel'), schema=SttResult)
+        elow1 = res.end_low_latency()
+
+        elow1.print()
+
+        if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
+            tester = Tester(topo)
+            tester.run_for(60)
+            tester.tuple_count(elow1, 3, exact=False)
+            self.test_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
+            tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
+        else:
+            # build only
+            self._build_only(name, topo)
 
 class TestDistributed(Test):
     def setUp(self):

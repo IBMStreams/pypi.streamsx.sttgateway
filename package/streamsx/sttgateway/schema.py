@@ -13,6 +13,8 @@ _SPL_SCHEMA_STT_RESULT = 'tuple<rstring conversationId,	boolean transcriptionCom
 _SPL_SCHEMA_STT_RESULT_PARTIAL = 'tuple<boolean finalizedUtterance, float64 confidence>'
 
 _SPL_SCHEMA_STT_INPUT = 'tuple<rstring conversationId, blob speech>'
+
+_SPL_SCHEMA_STT_RESULT_KEYWORD_SPOTTING = 'tuple<map<rstring, list<tuple<float64 startTime, float64 endTime, float64 confidence>>> keywordsSpottingResults>'
 			
 
 class GatewaySchema:
@@ -45,6 +47,18 @@ class GatewaySchema:
 
     * finalizedUtterance(boolean) - boolean value to indicate if this is an interim partial utterance or a finalized utterance. 
     * confidence(float64) - confidence value for an interim partial utterance or for a finalized utterance or for the full text.
+
+    """
+    pass
+
+
+    STTResultKeywordExtension = StreamSchema (_SPL_SCHEMA_STT_RESULT_KEYWORD_SPOTTING)
+    """
+    This schema is added to STTResult schema when keywords_to_be_spotted is set in :py:meth:`~streamsx.sttgateway.WatsonSTT`
+    
+    The schema defines following attributes
+
+    * keywordsSpottingResults(map<rstring, list<tuple<float64 startTime, float64 endTime, float64 confidence>>>) - The keys of the map are the spotted keywords. 
 
     """
     pass
