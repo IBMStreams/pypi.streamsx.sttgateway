@@ -141,6 +141,13 @@ class Test(unittest.TestCase):
         }
         gateway = stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel', partial_result=True)
         gateway.content_type = 'audio/mp3'
+        gateway.filter_profanity = True
+        gateway.keywords_spotting_threshold = 0.5
+        gateway.keywords_to_be_spotted = ['sample','test']
+        #gateway.keywords_to_be_spotted = "['sample','test']"
+        gateway.max_utterance_alternatives = 5
+        gateway.non_final_utterances_needed = True
+
         res = files.map(gateway)
         res.print()
         # build only
