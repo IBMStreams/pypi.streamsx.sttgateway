@@ -149,7 +149,7 @@ class Test(unittest.TestCase):
         gateway.non_final_utterances_needed = True
 
         res = files.map(gateway)
-        res.print()
+
         # build only
         self._build_only(name, topo)
 

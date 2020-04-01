@@ -247,7 +247,6 @@ class WatsonSTT(streamsx.topology.composite.Map):
     def max_utterance_alternatives(self, value):
         self._max_utterance_alternatives = value
 
-
     @property
     def non_final_utterances_needed(self):
         """
@@ -276,6 +275,9 @@ class WatsonSTT(streamsx.topology.composite.Map):
         if schema is GatewaySchema.STTResult:
             is_stt_result_schema = True
 
+        if self.keywords_to_be_spotted is not None and is_stt_result_schema:
+            schema = schema.extend(GatewaySchema.STTResultKeywordExtension)
+
         if isinstance(self.credentials, dict):
             url, access_token, api_key, iam_token_url = _read_credentials(self.credentials)
             app_config_name = None
@@ -297,6 +299,8 @@ class WatsonSTT(streamsx.topology.composite.Map):
         if self.keywords_spotting_threshold is not None:
             _op.params['keywordsSpottingThreshold'] = streamsx.spl.types.float64(self.keywords_spotting_threshold)
         if self.keywords_to_be_spotted is not None:
+            if is_stt_result_schema:
+                _op.keywordsSpottingResults = _op.output(_op.outputs[0], _op.expression('getKeywordsSpottingResults()'))
             if isinstance(self.keywords_to_be_spotted, str):
                 _op.params['keywordsToBeSpotted'] = _op.expression(self.keywords_to_be_spotted)
             elif isinstance(self.keywords_to_be_spotted, list):
