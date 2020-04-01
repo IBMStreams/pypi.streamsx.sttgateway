@@ -90,6 +90,11 @@ class WatsonSTT(streamsx.topology.composite.Map):
     """
     Composite map transformation for WatsonSTT
 
+    This operator is designed to ingest audio data in the form of a file (.wav, .mp3 etc.) or RAW audio and then transcribe that audio into text via the IBM Watson STT (Speech To Text) cloud service. It does that by sending the audio data to the configured Watson STT service running in the IBM public cloud or in the IBM Cloud Pak for Data via the Websocket interface. It then outputs transcriptions of speech in the form of utterances or in full text as configured. An utterance is a group of transcribed words meant to approximate a sentence. Audio data must be in 16-bit little endian, mono format. For the Telephony model and configurations, the audio must have an 8 kHz sampling rate. For the Broadband model and configurations, the audio must have a 16 kHz sampling rate. The data can be provided as a .wav file or as RAW uncompressed PCM audio.
+
+    The input stream must contain an attribute with the name ``speech`` of type ``blob``.
+    A window punctuation marker or an empty speech blob may be used to mark the end of an conversation. Thus a conversation can be a composite of multiple audio files. When the end of conversation is encountered, the STT engine delivers all results of the current conversation and flushes all buffers.
+
     Example for reading audio files and speech to text transformation::
 
         import streamsx.sttgateway as stt
@@ -128,8 +133,24 @@ class WatsonSTT(streamsx.topology.composite.Map):
     ----------
     credentials : str|dict
         Name of the application configuration or dict containing the credentials for WatsonSTT. The dict contains either "url" and "access_token" (STT service in Cloud Pak for Data) or "url" and "api_key" and "iam_token_url" (STT IBM cloud service)
+
+        Example for WatsonSTT in Cloud Pak for Data::
+
+            credentials = {
+                "url": "wss://xxxx/instances/xxxx/v1/recognize",
+                "access_token": "xxxx",
+            }
+
+        Example for WatsonSTT IBM cloud service::
+
+            credentials = {
+                "url": "wss://xxxx/instances/xxxx/v1/recognize",
+                "api_key": "xxxx",
+                "iam_token_url": "https://iam.cloud.ibm.com/identity/token",
+            }
+
     base_language_model : str
-        This parameter specifies the name of the Watson STT base language model that should be used, see: https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-input#models
+        This parameter specifies the name of the Watson STT base language model that should be used. https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-input#models
     partial_result : bool
         ``True`` to get partial utterances, ``False`` to get the full text after transcribing the entire audio (default).
     options : kwargs
@@ -143,8 +164,20 @@ class WatsonSTT(streamsx.topology.composite.Map):
         self.partial_result = partial_result
 
         self.content_type = None
+        self.filter_profanity = None
+        self.keywords_spotting_threshold = None
+        self.keywords_to_be_spotted = None
+        self.max_utterance_alternatives = None
         if 'content_type' in options:
             self.content_type = options.get('content_type')
+        if 'filter_profanity' in options:
+            self.filter_profanity = options.get('filter_profanity')
+        if 'keywords_spotting_threshold' in options:
+            self.keywords_spotting_threshold = options.get('keywords_spotting_threshold')
+        if 'keywords_to_be_spotted' in options:
+            self.keywords_to_be_spotted = options.get('keywords_to_be_spotted')
+        if 'max_utterance_alternatives' in options:
+            self.max_utterance_alternatives = options.get('max_utterance_alternatives')
 
     @property
     def content_type(self):
@@ -156,6 +189,78 @@ class WatsonSTT(streamsx.topology.composite.Map):
     @content_type.setter
     def content_type(self, value):
         self._content_type = value
+
+    @property
+    def filter_profanity(self):
+        """
+            bool: This parameter indicates whether profanity should be filtered from a transcript. (Default is false)
+            https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-output#profanity_filter 
+        """
+        return self._filter_profanity
+
+    @filter_profanity.setter
+    def filter_profanity(self, value):
+        self._filter_profanity = value
+
+    @property
+    def keywords_spotting_threshold(self):
+        """
+            float: This parameter specifies the minimum confidence level that the STT service must have for an utterance word to match a given keyword. A value of 0.0 disables this feature. Valid value must be less than 1.0. (Default is 0.3)
+            https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-output#keyword_spotting 
+        """
+        return self._keywords_spotting_threshold
+
+    @keywords_spotting_threshold.setter
+    def keywords_spotting_threshold(self, value):
+        self._keywords_spotting_threshold = value
+
+    @property
+    def keywords_to_be_spotted(self):
+        """
+            list(str): This parameter specifies a list (array) of strings to be spotted. (Default is an empty list)
+        Example for list format::
+
+        ['keyword1','keyword2']
+
+        Example for str format::
+
+        "['keyword1','keyword2']"
+        """
+        return self._keywords_to_be_spotted
+
+    @keywords_to_be_spotted.setter
+    def keywords_to_be_spotted(self, value):
+        self._keywords_to_be_spotted = value
+
+    @property
+    def max_utterance_alternatives(self):
+        """
+            int: This parameter indicates the required number of n-best alternative hypotheses for the transcription results. (Default is 3)
+            https://cloud.ibm.com/docs/services/speech-to-text?topic=speech-to-text-output#max_alternatives
+
+            .. note:: This parameter is ignored if ``partial_result`` is ``False``.
+
+        """
+        return self._max_utterance_alternatives
+
+    @max_utterance_alternatives.setter
+    def max_utterance_alternatives(self, value):
+        self._max_utterance_alternatives = value
+
+
+    @property
+    def non_final_utterances_needed(self):
+        """
+            bool: This parameter controls the output of non final utterances. (Default is False)
+
+            .. note:: This parameter is ignored if ``partial_result`` is ``False``.
+
+        """
+        return self._non_final_utterances_needed
+
+    @non_final_utterances_needed.setter
+    def non_final_utterances_needed(self, value):
+        self._non_final_utterances_needed = value
 
 
     def populate(self, topology, stream, schema, name, **options):
@@ -186,8 +291,32 @@ class WatsonSTT(streamsx.topology.composite.Map):
 
         _op = _WatsonSTT(stream, token_stream, schema=schema, baseLanguageModel=self.base_language_model, contentType=self.content_type, name=name)
         
+        if self.filter_profanity is not None:
+            if self.filter_profanity:
+                _op.params['filterProfanity'] = _op.expression('true')
+        if self.keywords_spotting_threshold is not None:
+            _op.params['keywordsSpottingThreshold'] = streamsx.spl.types.float64(self.keywords_spotting_threshold)
+        if self.keywords_to_be_spotted is not None:
+            if isinstance(self.keywords_to_be_spotted, str):
+                _op.params['keywordsToBeSpotted'] = _op.expression(self.keywords_to_be_spotted)
+            elif isinstance(self.keywords_to_be_spotted, list):
+                i = 0
+                keywords = ''
+                for word in self.keywords_to_be_spotted: 
+                    if i > 0:
+                        keywords = keywords + ','
+                    keywords = keywords + '\"'+word+'\"'
+                    i = i + 1
+                _op.params['keywordsToBeSpotted'] = _op.expression('['+keywords+']') # list of string
+
         if self.partial_result:
             _op.params['sttResultMode'] = _op.expression('partial')
+            if self.max_utterance_alternatives is not None:
+                _op.params['maxUtteranceAlternatives'] = streamsx.spl.types.int32(self.max_utterance_alternatives)
+            if self.non_final_utterances_needed is not None:
+                if self.non_final_utterances_needed:
+                    _op.params['nonFinalUtterancesNeeded'] = _op.expression('true')
+
         else:
             _op.params['sttResultMode'] = _op.expression('complete');
         if app_config_name is not None:
