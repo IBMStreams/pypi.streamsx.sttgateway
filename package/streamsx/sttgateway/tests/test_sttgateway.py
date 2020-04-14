@@ -46,9 +46,11 @@ class Test(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         print (str(self))
-        self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
         self.sttgateway_audio_dir = os.environ["STREAMS_STTGATEWAY_AUDIO_DIR"]
-        
+       
+    def setUp(self):
+        self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
+
     def _index_toolkit(self, tk):
         if _streams_install_env_var():
             cmd = os.environ['STREAMS_INSTALL']+'/bin/spl-make-toolkit -i .'
@@ -71,7 +73,8 @@ class Test(unittest.TestCase):
         print ('\n---------'+str(self))
         name = 'test_app_config'
         topo = Topology(name)
-        toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
+        if self.sttgateway_toolkit_home is not None:
+            toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
         self._index_toolkit(_get_test_tk_path())
         toolkit.add_toolkit(topo, _get_test_tk_path())
 
@@ -81,7 +84,7 @@ class Test(unittest.TestCase):
         with open(cred_file) as data_file:
             creds = json.load(data_file)
 
-        if ("TestDistributed" in str(self) and cp4d_url_env_var() is True):
+        if (("TestDistributed" in str(self) or "TestICP" in str(self)) and cp4d_url_env_var() is True):
             instance = streamsx.rest_primitives.Instance.of_endpoint(verify=False)
             res = stt.configure_connection(instance, credentials=creds, name=app_config)
             print (str(res))
@@ -113,7 +116,7 @@ class Test(unittest.TestCase):
 
         res.print()
 
-        if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
+        if (("TestDistributed" in str(self)) or ("TestICP" in str(self))):
             tester = Tester(topo)
             tester.tuple_count(res, 1, exact=False)
             self.test_config[context.ConfigParams.SC_OPTIONS] = '--c++std=c++11'
@@ -127,7 +130,8 @@ class Test(unittest.TestCase):
         print ('\n---------'+str(self))
         name = 'test_properties'
         topo = Topology(name)
-        toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
+        if self.sttgateway_toolkit_home is not None:
+            toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
         self._index_toolkit(_get_test_tk_path())
         toolkit.add_toolkit(topo, _get_test_tk_path())
 
@@ -158,9 +162,8 @@ class Test(unittest.TestCase):
         print ('\n---------'+str(self))
         name = 'test_schema_named_tuple'
         topo = Topology(name)
-        toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
-        self._index_toolkit(_get_test_tk_path())
-        toolkit.add_toolkit(topo, _get_test_tk_path())
+        if self.sttgateway_toolkit_home is not None:
+            toolkit.add_toolkit(topo, self.sttgateway_toolkit_home)
 
         cred_file = os.environ['STT_CREDENTIALS']
         print("STT credentials file:" + cred_file)
@@ -191,7 +194,7 @@ class Test(unittest.TestCase):
 
         elow1.print()
 
-        if (("TestDistributed" in str(self)) or ("TestStreamingAnalytics" in str(self))):
+        if (("TestDistributed" in str(self)) or ("TestICP" in str(self)) or ("TestStreamingAnalytics" in str(self))):
             tester = Tester(topo)
             tester.run_for(60)
             tester.tuple_count(elow1, 3, exact=False)
@@ -204,34 +207,41 @@ class Test(unittest.TestCase):
 class TestDistributed(Test):
     def setUp(self):
         Tester.setup_distributed(self)
+        self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
         # setup test config
         self.test_config = {}
         job_config = context.JobConfig(tracing='info')
         job_config.add(self.test_config)
         self.test_config[context.ConfigParams.SSL_VERIFY] = False  
 
-    def _launch(self, topo):
-        rc = context.submit('DISTRIBUTED', topo, self.test_config)
-        print(str(rc))
-        if rc is not None:
-            if (rc.return_code == 0):
-                rc.job.cancel()
 
+class TestICPRemote(Test):
+    def setUp(self):
+        Tester.setup_distributed(self)
+        self.sttgateway_toolkit_home = None # use toolkit from build service
+        # setup test config
+        self.test_config = {}
+        job_config = context.JobConfig(tracing='info')
+        job_config.add(self.test_config)
+        self.test_config[context.ConfigParams.SSL_VERIFY] = False  
 
 class TestStreamingAnalytics(Test):
     def setUp(self):
-        # setup test config
-        #self.test_config = {}
-        #job_config = context.JobConfig(tracing='info')
-        #job_config.add(self.test_config)
+        self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
         Tester.setup_streaming_analytics(self, force_remote_build=False)
 
-    def _launch(self, topo):
-        rc = context.submit('STREAMING_ANALYTICS_SERVICE', topo, self.test_config)
-        print(str(rc))
-        if rc is not None:
-            if (rc.return_code == 0):
-                rc.job.cancel()
+    @classmethod
+    def setUpClass(self):
+        # start streams service
+        connection = sr.StreamingAnalyticsConnection()
+        service = connection.get_streaming_analytics()
+        result = service.start_instance()
+        super().setUpClass()
+
+class TestStreamingAnalyticsRemote(Test):
+    def setUp(self):
+        self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"] # still require local toolkit unless toolkits not updated on Streaming Analytics service
+        Tester.setup_streaming_analytics(self, force_remote_build=True)
 
     @classmethod
     def setUpClass(self):
