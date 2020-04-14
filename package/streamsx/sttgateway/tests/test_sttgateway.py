@@ -183,11 +183,13 @@ class Test(unittest.TestCase):
         import streamsx.standard.files as stdfiles
         import typing
         SttResult = typing.NamedTuple('SttResult', [('conversationId', str), ('utteranceText', str)])
+        SttInput = typing.NamedTuple('SttInput', [('conversationId', str), ('speech', bytes)])
 
         s = topo.source(stdfiles.DirectoryScan(directory=dirname, pattern='.*call-center.*\.wav$'))
 
         low1 = s.low_latency()
-        files = low1.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=StreamSchema('tuple<blob speech, rstring conversationId>'))
+        #files = low1.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=StreamSchema('tuple<blob speech, rstring conversationId>'))
+        files = low1.map(stdfiles.BlockFilesReader(block_size=512, file_name='conversationId'), schema=SttInput)
 
         res = files.map(stt.WatsonSTT(credentials=creds, base_language_model='en-US_NarrowbandModel'), schema=SttResult)
         elow1 = res.end_low_latency()
