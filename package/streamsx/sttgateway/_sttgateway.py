@@ -92,7 +92,11 @@ class WatsonSTT(streamsx.topology.composite.Map):
 
     This operator is designed to ingest audio data in the form of a file (.wav, .mp3 etc.) or RAW audio and then transcribe that audio into text via the IBM Watson STT (Speech To Text) cloud service. It does that by sending the audio data to the configured Watson STT service running in the IBM public cloud or in the IBM Cloud Pak for Data via the Websocket interface. It then outputs transcriptions of speech in the form of utterances or in full text as configured. An utterance is a group of transcribed words meant to approximate a sentence. Audio data must be in 16-bit little endian, mono format. For the Telephony model and configurations, the audio must have an 8 kHz sampling rate. For the Broadband model and configurations, the audio must have a 16 kHz sampling rate. The data can be provided as a .wav file or as RAW uncompressed PCM audio.
 
-    .. note:: The input stream **must** contain an attribute with the name ``speech`` of type ``blob`` or ``binary``, for example ``StreamSchema('tuple<blob speech>')`` or ``typing.NamedTuple('SttInput', [('speech', bytes)])``.
+    .. note:: 
+        The input stream **must** contain an attribute with the name ``speech`` of type ``blob`` or ``bytes``, for example 
+
+        * ``StreamSchema('tuple<blob speech>')``
+        * ``typing.NamedTuple('SttInput', [('speech', bytes)])``.
 
     A window punctuation marker or an empty speech blob may be used to mark the end of an conversation. Thus a conversation can be a composite of multiple audio files. When the end of conversation is encountered, the STT engine delivers all results of the current conversation and flushes all buffers.
 
