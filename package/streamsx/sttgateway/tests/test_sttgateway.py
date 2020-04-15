@@ -12,6 +12,7 @@ import unittest
 import datetime
 import os
 import json
+import shutil
 from subprocess import call, Popen, PIPE
 from streamsx.sttgateway.schema import GatewaySchema
 
@@ -41,12 +42,20 @@ def cp4d_url_env_var():
         result = False
     return result
 
+def stt_env_vars():
+    result = True
+    try:
+        os.environ['STT_CREDENTIALS']
+        os.environ["STREAMS_STTGATEWAY_AUDIO_DIR"]
+    except KeyError: 
+        result = False
+    return result
+
 class Test(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
         print (str(self))
-        self.sttgateway_audio_dir = os.environ["STREAMS_STTGATEWAY_AUDIO_DIR"]
        
     def setUp(self):
         self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
@@ -69,6 +78,7 @@ class Test(unittest.TestCase):
         assert(result.return_code == 0)
 
 
+    @unittest.skipUnless(stt_env_vars(), "STT_CREDENTIALS and STREAMS_STTGATEWAY_AUDIO_DIR required")
     def test_app_config(self):
         print ('\n---------'+str(self))
         name = 'test_app_config'
@@ -101,6 +111,7 @@ class Test(unittest.TestCase):
             else:
                 print ('Application configuration not created')
      
+        self.sttgateway_audio_dir = os.environ["STREAMS_STTGATEWAY_AUDIO_DIR"]
         dirname = 'etc'
         topo.add_file_dependency(self.sttgateway_audio_dir, dirname) 
         if os.path.isdir(self.sttgateway_audio_dir):
@@ -157,7 +168,7 @@ class Test(unittest.TestCase):
         # build only
         self._build_only(name, topo)
 
-
+    @unittest.skipUnless(stt_env_vars(), "STT_CREDENTIALS and STREAMS_STTGATEWAY_AUDIO_DIR required")
     def test_schema_named_tuple(self):
         print ('\n---------'+str(self))
         name = 'test_schema_named_tuple'
@@ -170,6 +181,7 @@ class Test(unittest.TestCase):
         with open(cred_file) as data_file:
             creds = json.load(data_file)
     
+        self.sttgateway_audio_dir = os.environ["STREAMS_STTGATEWAY_AUDIO_DIR"]
         dirname = 'etc'
         topo.add_file_dependency(self.sttgateway_audio_dir, dirname) 
         if os.path.isdir(self.sttgateway_audio_dir):
@@ -206,7 +218,24 @@ class Test(unittest.TestCase):
             # build only
             self._build_only(name, topo)
 
+
+class TestDownloadToolkit(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(self):
+        print (str(self))
+
+    def test_download_latest(self):
+        topology = Topology()
+        location = stt.download_toolkit()
+        print('toolkit location: ' + location)
+        toolkit.add_toolkit(topology, location)
+        if os.path.isdir(location):
+            shutil.rmtree(location)
+
+
 class TestDistributed(Test):
+
     def setUp(self):
         Tester.setup_distributed(self)
         self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
@@ -218,6 +247,7 @@ class TestDistributed(Test):
 
 
 class TestICPRemote(Test):
+
     def setUp(self):
         Tester.setup_distributed(self)
         self.sttgateway_toolkit_home = None # use toolkit from build service
@@ -228,6 +258,7 @@ class TestICPRemote(Test):
         self.test_config[context.ConfigParams.SSL_VERIFY] = False  
 
 class TestStreamingAnalytics(Test):
+
     def setUp(self):
         self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"]
         Tester.setup_streaming_analytics(self, force_remote_build=False)
@@ -241,6 +272,7 @@ class TestStreamingAnalytics(Test):
         super().setUpClass()
 
 class TestStreamingAnalyticsRemote(Test):
+
     def setUp(self):
         self.sttgateway_toolkit_home = os.environ["STREAMS_STTGATEWAY_TOOLKIT"] # still require local toolkit unless toolkits not updated on Streaming Analytics service
         Tester.setup_streaming_analytics(self, force_remote_build=True)
