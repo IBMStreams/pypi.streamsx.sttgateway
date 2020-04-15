@@ -1,1 +1,2 @@
 streamsx>=1.14.6,<2.0
+streamsx.toolkits

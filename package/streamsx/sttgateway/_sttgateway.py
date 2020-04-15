@@ -12,11 +12,15 @@ import json
 from streamsx.sttgateway.schema import GatewaySchema
 import streamsx.topology.composite
 import streamsx.spl.toolkit
+import streamsx.toolkits
+
+
+_TOOLKIT_NAME = 'com.ibm.streamsx.sttgateway'
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
     # This is important when toolkit is not set with streamsx.spl.toolkit.add_toolkit (selecting toolkit from remote build service)
-    streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.sttgateway', '[2.0.0,3.0.0)')
+    streamsx.spl.toolkit.add_toolkit_dependency(topo, _TOOLKIT_NAME, '[2.0.0,3.0.0)')
 
 def _read_credentials(credentials):
     url = None
@@ -31,6 +35,42 @@ def _read_credentials(credentials):
     else:
         raise TypeError(credentials)
     return url, access_token, api_key, iam_token_url
+
+def download_toolkit(url=None, target_dir=None):
+    r"""Downloads the latest sttgateway toolkit from GitHub.
+
+    Example for updating the sttgateway toolkit for your topology with the latest toolkit from GitHub::
+
+        import streamsx.sttgateway as stt
+        from streamsx.spl import toolkit
+        # download sttgateway toolkit from GitHub
+        stt_toolkit_location = stt.download_toolkit()
+        # add the toolkit to topology
+        toolkit.add_toolkit(topology, stt_toolkit_location)
+
+    Example for updating the topology with a specific version of the sttgateway toolkit using a URL::
+
+        import streamsx.sttgateway as stt
+        from streamsx.spl import toolkit
+        url220 = 'https://github.com//IBMStreams/streamsx.sttgateway/releases/download/v2.2.0/streamsx.sttgateway-2.2.0-ced653b-20200331-1219.tgz'
+        stt_toolkit_location = stt.download_toolkit(url=url220)
+        toolkit.add_toolkit(topology, stt_toolkit_location)
+
+    Args:
+        url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to 
+            download a specific version of the toolkit.
+        target_dir(str): the directory where the toolkit is unpacked to. If a relative path is given,
+            the path is appended to the system temporary directory, for example to /tmp on Unix/Linux systems.
+            If target_dir is ``None`` a location relative to the system temporary directory is chosen.
+
+    Returns:
+        str: the location of the downloaded sttgateway toolkit
+
+    .. note:: This function requires an outgoing Internet connection
+    .. versionadded:: 0.5
+    """
+    _toolkit_location = streamsx.toolkits.download_toolkit (toolkit_name=_TOOLKIT_NAME, url=url, target_dir=target_dir)
+    return _toolkit_location
 
 def configure_connection(instance, credentials, name='sttConnection'):
     """Configures IBM Streams for a connection to Watson STT.
