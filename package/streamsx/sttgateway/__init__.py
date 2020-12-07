@@ -6,7 +6,7 @@
 """
 
 
-__version__='1.0.0'
+__version__='1.0.1'
 
 __all__ = [ 'WatsonSTT', 'configure_connection', 'download_toolkit']
 from streamsx.sttgateway._sttgateway import WatsonSTT, configure_connection, download_toolkit
